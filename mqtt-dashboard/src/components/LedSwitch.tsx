@@ -34,11 +34,9 @@ const LedSwitch = () => {
           pico w led aan en uit kan zetten.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="flex gap-4 items-stretch">
-          <Button onClick={switchOn}>Led On</Button>
-          <Button onClick={switchOff}>Led Off</Button>
-        </div>
+      <CardContent className="flex justify-around gap-8">
+        <Button onClick={switchOn}>Led On</Button>
+        <Button onClick={switchOff}>Led Off</Button>
       </CardContent>
       <CardFooter>
         <div className="flex justify-between min-w-full"></div>
