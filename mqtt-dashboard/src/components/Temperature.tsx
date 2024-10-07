@@ -36,7 +36,8 @@ const Temperature = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Temperatuur</CardTitle>
+        <CardTitle className="text-center">Temperatuur</CardTitle>
+        <hr className="border-2" />
         <CardDescription>
           Deze kaart laat temperatuur zien die vanuit MQTT op topic LEO/temp
           binnenkomt.

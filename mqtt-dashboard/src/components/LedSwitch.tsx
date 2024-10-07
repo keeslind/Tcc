@@ -28,7 +28,8 @@ const LedSwitch = () => {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Licht</CardTitle>
+        <CardTitle className="text-center">Licht</CardTitle>
+        <hr className="border-2" />
         <CardDescription>
           Deze kaart laat zien hoe je vanuit MQTT op topic LEO/led de raspberry
           pico w led aan en uit kan zetten.

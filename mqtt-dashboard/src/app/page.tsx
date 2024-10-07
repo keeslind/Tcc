@@ -5,7 +5,7 @@ import Temperature from "@/components/Temperature";
 export default function Home() {
   return (
     <div>
-      <div className="p-8 flex gap-8 items-center sm:items-start">
+      <div className="p-8 flex flex-col md:flex-row gap-8 items-center sm:items-start">
         <Temperature />
         <LedSwitch />
       </div>
