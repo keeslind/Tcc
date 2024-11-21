@@ -14,9 +14,15 @@
 
 #include "arduino_secrets.h"
 
+// naming conventions:
+// constants/defines  : UPPER_CASE
+// types              : UpperCamelCase
+// variables          : lower_case
+// functions          : lowerCamelCase
+
 // I2C bus
-const int sdapin = 16;  // PICO_DEFAULT_I2C_SDA_PIN // 4
-const int sclpin = 17;  // PICO_DEFAULT_I2C_SCL_PIN // 5
+const int SDA_PIN = 16;  // PICO_DEFAULT_I2C_SDA_PIN // 4
+const int SCL_PIN = 17;  // PICO_DEFAULT_I2C_SCL_PIN // 5
 
 // screen
 #define SCREEN_WIDTH 128  // OLED display width, in pixels
@@ -24,50 +30,51 @@ const int sclpin = 17;  // PICO_DEFAULT_I2C_SCL_PIN // 5
 #define BUTTON_PIN BOOTSEL
 // Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
 // On an arduino UNO:       A4(SDA), A5(SCL)
-#define OLED_RESET -1        // Reset pin # (or -1 if sharing Arduino reset pin)
+// #define OLED_RESET -1        // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3C  ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-int count = 0;
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire);
+String display_line[] = { "", "", "", "", "" }; // content of lines currently displayed
+char line[32];
+time_t now;
+time_t time_last_train;
+char time_displayed[80];
+char time_buff[80];
+boolean inverted_display = false;
 
 // NFC
 PN532_I2C pn532_i2c = PN532_I2C(Wire);
 NfcAdapter nfc = NfcAdapter(pn532_i2c);
 
-const int knownTags = 20;
-const String tagIds[] = { "04 65 98 FA C1 1C 91", "04 5A 98 FA C1 1C 91", "04 59 98 FA C1 1C 91", "04 4E 98 FA C1 1C 91", "04 4D 98 FA C1 1C 91",
-                          "04 5E 99 FA C1 1C 91", "04 69 99 FA C1 1C 91", "04 6A 99 FA C1 1C 91", "04 75 99 FA C1 1C 91", "04 76 99 FA C1 1C 91",
-                          "1D 83 74 53 08 10 80", "1D 84 74 53 08 10 80", "1D 85 74 53 08 10 80", "1D 86 74 53 08 10 80", "1D 87 74 53 08 10 80",
-                          "1D 88 74 53 08 10 80", "1D 89 74 53 08 10 80", "1D 8A 74 53 08 10 80", "1D 8B 74 53 08 10 80", "1D 8C 74 53 08 10 80" };
+const int KNOWN_TAGS = 20;
+const String TAG_IDS[] = { "04 65 98 FA C1 1C 91", "04 5A 98 FA C1 1C 91", "04 59 98 FA C1 1C 91", "04 4E 98 FA C1 1C 91", "04 4D 98 FA C1 1C 91",
+                           "04 5E 99 FA C1 1C 91", "04 69 99 FA C1 1C 91", "04 6A 99 FA C1 1C 91", "04 75 99 FA C1 1C 91", "04 76 99 FA C1 1C 91",
+                           "1D 83 74 53 08 10 80", "1D 84 74 53 08 10 80", "1D 85 74 53 08 10 80", "1D 86 74 53 08 10 80", "1D 87 74 53 08 10 80",
+                           "1D 88 74 53 08 10 80", "1D 89 74 53 08 10 80", "1D 8A 74 53 08 10 80", "1D 8B 74 53 08 10 80", "1D 8C 74 53 08 10 80" };
 
-String tagId = "";
-String displayLine[] = { "", "", "", "", "" };
-char line[32];
-time_t now;
-time_t timeLastTrain;
-char timeDisplayed[80];
-char time_buff[80];
-
-boolean invertedDisplay = false;
+String tag_id = "";
 
 // MQTT
-const char ssid[] = SECRET_SSID;  // your network SSID (name)
-const char pass[] = SECRET_PASS;  // your network password (use for WPA, or use as key for WEP)
+const char SSID[] = SECRET_SSID;  // your network SSID (name)
+const char PASS[] = SECRET_PASS;  // your network PASSword (use for WPA, or use as key for WEP)
 
-WiFiClient wifiClient;
-MqttClient mqttClient(wifiClient);
+WiFiClient wifi_client;
+MqttClient mqtt_client(wifi_client);
 
-const char broker[] = "192.168.178.232";
-int port = 1883;
-const char topic[] = "tcc/train";
+const char BROKER[] = "192.168.178.232";
+const int8_t PORT = 1883;
+const char TOPIC[] = "tcc/train";
 
-const long interval = 1000;
-unsigned long previousMillis = 0;
+const long INTERVAL = 1000;
+unsigned long previous_millis = 0;
 
-// Servo
-const int nrOfServos = 2;
-const int servoPin[nrOfServos] = { 0, 1 };
+// Turnouts
+const int8_t NR_OF_TURNOUTS = 2;
+const int8_t SERVO_PIN[NR_OF_TURNOUTS] = { 0, 1 };
 // Create a servo objects
-Servo myservo[nrOfServos];
+Servo turnout_servo[NR_OF_TURNOUTS];
+
+int loop_count = 0;
 
 void setup(void) {
   Serial.begin(115200);
@@ -78,8 +85,8 @@ void setup(void) {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
 
   // IC2 bus
-  Wire.setSDA(sdapin);
-  Wire.setSCL(sclpin);
+  Wire.setSDA(SDA_PIN);
+  Wire.setSCL(SCL_PIN);
 
   setupTime();
   setupDisplay();
@@ -96,8 +103,8 @@ void loop() {
   togglePixel(127, 0);
   // checkInvertDisplay();
   readTrain();
-  mqttClient.poll();
-  count++;
+  mqtt_client.poll();
+  loop_count++;
 }
 
 void setupTime() {
@@ -106,7 +113,7 @@ void setupTime() {
   tv.tv_usec = 0;
   settimeofday(&tv, nullptr);
   time(&now);
-  timeLastTrain = now;
+  time_last_train = now;
 }
 
 void setupDisplay() {
@@ -122,7 +129,7 @@ void setupDisplay() {
   display.setTextSize(1);               // Normal 1:1 pixel scale
   display.setTextColor(SSD1306_WHITE);  // Draw white text
   display.setCursor(0, 0);
-  display.invertDisplay(invertedDisplay);
+  display.invertDisplay(inverted_display);
 }
 
 void setupNFC() {
@@ -133,39 +140,39 @@ void setupNFC() {
 
 void setupWIFI() {
   // WIFI: attempt to connect to WiFi network:
-  while (WiFi.begin(ssid, pass) != WL_CONNECTED) {
+  while (WiFi.begin(SSID, PASS) != WL_CONNECTED) {
     // failed, retry
     display.print(".");
     display.display();
     delay(5000);
   }
   display.print("WIFI: ");
-  display.println(ssid);
+  display.println(SSID);
   display.display();
 }
 
 void setupMQTT() {
-  if (!mqttClient.connect(broker, port)) {
+  if (!mqtt_client.connect(BROKER, PORT)) {
     Serial.print("MQTT failed: ");
-    Serial.println(mqttClient.connectError());
+    Serial.println(mqtt_client.connectError());
     for (;;) {  // Don't proceed, loop forever
       toggleLed(LED_BUILTIN);
       delay(1000);
     }
   }
   display.print("MQTT: ");
-  display.println(broker);
+  display.println(BROKER);
   display.display();
 
-  mqttClient.onMessage(onMqttMessage);
-  // subscribe to tcc/switch topic
-  mqttClient.subscribe("tcc/switch");
+  mqtt_client.onMessage(onMqttMessage);
+  // subscribe to tcc/switch TOPIC
+  mqtt_client.subscribe("tcc/switch");
 }
 
 void setupServo() {
-  for (int s = 0; s < nrOfServos; s++) {
-    myservo[s].attach(servoPin[s]);
-    myservo[s].write(30);
+  for (int t = 0; t < NR_OF_TURNOUTS; t++) {
+    turnout_servo[t].attach(SERVO_PIN[t]);
+    turnout_servo[t].write(30);
   }
 }
 
@@ -177,39 +184,39 @@ void checkInvertDisplay() {
     delay(20);
     newState = digitalRead(BUTTON_PIN);
     if (newState == LOW) {
-      invertedDisplay = !invertedDisplay;
-      display.invertDisplay(invertedDisplay);
+      inverted_display = !inverted_display;
+      display.invertDisplay(inverted_display);
     }
   }
 }
 
 void readTrain() {
   if (readTag()) {
-    bool tagIdentified = false;
-    for (int i = 0; i < knownTags && !tagIdentified; i++) {
-      if (tagId == tagIds[i]) {
-        sprintf(line, "%s  Trein %2i", getTime(), i + 1);
-        tagIdentified = true;
+    bool tag_identified = false;
+    for (int i = 0; i < KNOWN_TAGS && !tag_identified; i++) {
+      if (tag_id == TAG_IDS[i]) {
+        sprintf(line, "%t  Trein %2i", getTime(), i + 1);
+        tag_identified = true;
         displayNewLine(line);
         // send message, the Print interface can be used to set the message contents
-        mqttClient.beginMessage(topic);
-        mqttClient.print(line);
-        mqttClient.endMessage();
+        mqtt_client.beginMessage(TOPIC);
+        mqtt_client.print(line);
+        mqtt_client.endMessage();
       }
     }
-    if (!tagIdentified) {
+    if (!tag_identified) {
       displayNewLine("Onbekende Trein:");
-      displayNewLine(tagId);
-      Serial.println(tagId);
+      displayNewLine(tag_id);
+      Serial.println(tag_id);
     }
-    timeLastTrain = now;
+    time_last_train = now;
   } else {
     time(&now);
-    if (now > timeLastTrain + 10) {
+    if (now > time_last_train + 10) {
       displayTime();
     } else {
-      // reset timeDisplayed
-      timeDisplayed[0] = 0;
+      // reset time_displayed
+      time_displayed[0] = 0;
     }
   }
 }
@@ -218,13 +225,13 @@ bool readTag() {
   bool newTagFound = false;
   if (nfc.tagPresent(100)) {
     NfcTag tag = nfc.read();
-    if (tagId != tag.getUidString()) {
-      tagId = tag.getUidString();
+    if (tag_id != tag.getUidString()) {
+      tag_id = tag.getUidString();
       newTagFound = true;
       // tag.print();
     }
   } else {
-    tagId = "";
+    tag_id = "";
   }
   return newTagFound;
 }
@@ -247,7 +254,7 @@ void toggleLed(const int led) {
 }
 
 void displayNewLine(const String& i_line) {
-  displayLine[4] = i_line;
+  display_line[4] = i_line;  // content of the display
 
   display.clearDisplay();
   display.setTextSize(1);               // Normal 1:1 pixel scale
@@ -256,23 +263,20 @@ void displayNewLine(const String& i_line) {
 
   // scroll up
   for (int8_t l = 0; l < 4; l++) {
-    displayLine[l] = displayLine[l + 1];
-    display.println(displayLine[l]);
+    display_line[l] = display_line[l + 1];
+    display.println(display_line[l]);
   }
   display.display();
 }
 
 void displayTime() {
-  if (strcmp(timeDisplayed, getTime()) != 0) {
-    strcpy(timeDisplayed, getTime());
-    for (int8_t l = 0; l < 5; l++) {
-      displayLine[l] = "";
-    }
+  if (strcmp(time_displayed, getTime()) != 0) {
+    strcpy(time_displayed, getTime());
     display.clearDisplay();
     display.setTextSize(2);               // Normal 1:1 pixel scale
     display.setTextColor(SSD1306_WHITE);  // Draw white text
     display.setCursor(40, 10);
-    display.println(timeDisplayed);
+    display.println(time_displayed);
     display.display();
   }
 }
@@ -300,7 +304,7 @@ char* getDateTime() {
 }
 
 void setTurnout(int turnout, bool straight) {
-  myservo[turnout].write(straight ? 30 : 150);
+  turnout_servo[turnout].write(straight ? 30 : 150);
   Serial.print("set turnout:");
   Serial.print(turnout);
   Serial.print(" straight:");
@@ -310,24 +314,24 @@ void setTurnout(int turnout, bool straight) {
 void onMqttMessage(int messageSize) {
   char message[64];
   int c = 0;
-  String topic = mqttClient.messageTopic();
+  String TOPIC = mqtt_client.messageTopic();
   // use the Stream interface to print the contents
-  while (mqttClient.available()) {
-    message[c++] = (char)mqttClient.read();
+  while (mqtt_client.available()) {
+    message[c++] = (char)mqtt_client.read();
   }
   message[c] = '\0';
 
-  // we received a message, print out the topic and contents
-  Serial.println("Received a message with topic '");
-  Serial.print(topic);
+  // we received a message, print out the TOPIC and contents
+  Serial.println("Received a message with TOPIC '");
+  Serial.print(TOPIC);
   Serial.print("', length ");
   Serial.print(messageSize);
   Serial.println(" bytes:");
   Serial.println(message);
 
-  if (topic == "tcc/switch") {
+  if (TOPIC == "tcc/switch") {
     int turnout = atoi(message);
-    bool straight = (message[strlen(message)-1] == 's');
+    bool straight = (message[strlen(message) - 1] == 't');
     setTurnout(turnout, straight);
   }
 }
