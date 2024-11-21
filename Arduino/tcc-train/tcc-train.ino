@@ -62,7 +62,7 @@ WiFiClient wifi_client;
 MqttClient mqtt_client(wifi_client);
 
 const char BROKER[] = "192.168.178.232";
-const int8_t PORT = 1883;
+const int PORT = 1883;
 const char TOPIC[] = "tcc/train";
 
 const long INTERVAL = 1000;
