@@ -63,7 +63,8 @@ MqttClient mqtt_client(wifi_client);
 
 const char BROKER[] = "192.168.178.232";
 const int PORT = 1883;
-const char TOPIC[] = "tcc/train";
+const char TRAIN_TOPIC[] = "tcc/train";
+const char SWITCH_TOPIC[] = "tcc/switch";
 
 const long INTERVAL = 1000;
 unsigned long previous_millis = 0;
@@ -166,7 +167,7 @@ void setupMQTT() {
 
   mqtt_client.onMessage(onMqttMessage);
   // subscribe to tcc/switch TOPIC
-  mqtt_client.subscribe("tcc/switch");
+  mqtt_client.subscribe(SWITCH_TOPIC);
 }
 
 void setupServo() {
@@ -195,11 +196,11 @@ void readTrain() {
     bool tag_identified = false;
     for (int i = 0; i < KNOWN_TAGS && !tag_identified; i++) {
       if (tag_id == TAG_IDS[i]) {
-        sprintf(line, "%t  Trein %2i", getTime(), i + 1);
+        sprintf(line, "%s  Trein %2i", getTime(), i + 1);
         tag_identified = true;
         displayNewLine(line);
         // send message, the Print interface can be used to set the message contents
-        mqtt_client.beginMessage(TOPIC);
+        mqtt_client.beginMessage(TRAIN_TOPIC);
         mqtt_client.print(line);
         mqtt_client.endMessage();
       }
@@ -314,24 +315,24 @@ void setTurnout(int turnout, bool straight) {
 void onMqttMessage(int messageSize) {
   char message[64];
   int c = 0;
-  String TOPIC = mqtt_client.messageTopic();
+  String msg_topic = mqtt_client.messageTopic();
   // use the Stream interface to print the contents
   while (mqtt_client.available()) {
     message[c++] = (char)mqtt_client.read();
   }
   message[c] = '\0';
 
-  // we received a message, print out the TOPIC and contents
-  Serial.println("Received a message with TOPIC '");
-  Serial.print(TOPIC);
+  // we received a message, print out the msg_topic and contents
+  Serial.println("Received a message with topic '");
+  Serial.print(msg_topic);
   Serial.print("', length ");
   Serial.print(messageSize);
   Serial.println(" bytes:");
   Serial.println(message);
 
-  if (TOPIC == "tcc/switch") {
+  if (msg_topic == SWITCH_TOPIC) {
     int turnout = atoi(message);
-    bool straight = (message[strlen(message) - 1] == 't');
+    bool straight = (message[strlen(message) - 1] == 's');
     setTurnout(turnout, straight);
   }
 }
