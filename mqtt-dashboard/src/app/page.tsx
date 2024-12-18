@@ -1,4 +1,4 @@
-import Switch from "@/components/Switch";
+import Turnout from "@/components/Turnout";
 import Train from "@/components/Train";
 
 export default function Home() {
@@ -6,7 +6,7 @@ export default function Home() {
     <div className="min-h-screen items-stretch">
       <div className="p-8 flex flex-col md:flex-row gap-8 items-center sm:items-start">
         <Train />
-        <Switch />
+        <Turnout />
       </div>
       <div className="text-center fixed bottom-0 space-y-1 w-full mb-2">
         <p>Een project van Kees & Leo</p>
